@@ -3,6 +3,7 @@
 
 #include <vm.h>
 #include "signal.h"
+#include <string.h>
 
 struct ksignal {
     sigaction_t sa[SIGMAX + 1];
@@ -24,5 +25,6 @@ int sys_sigreturn();
 int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset);
 int sys_sigpending(sigset_t __user *set);
 int sys_sigkill(int pid, int signo, int code);
-
+int sigreturn(struct proc *p);
+int setup_signal_handler(struct proc *p, int signo);
 #endif
