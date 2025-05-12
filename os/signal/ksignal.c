@@ -78,7 +78,7 @@ int setup_signal_handler(struct proc *p, int signo) {
         context.uc_mcontext.regs[i] = ((uint64 *)&tf->ra)[i];  // x1-x31
     }
     context.uc_mcontext.epc = tf->epc;
-    acquire(&p->mm->lock);
+    if (!holding(&p->mm->lock)) acquire(&p->mm->lock);
     if (copy_to_user(p->mm, (uint64)uctx, (char *)&context, sizeof(context)) < 0)
     {
         release(&p->mm->lock);
@@ -107,13 +107,12 @@ int setup_signal_handler(struct proc *p, int signo) {
 }
 
 int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *oldact) {
-    if (signo == SIGKILL || signo == SIGSTOP)
-        return -1;
+    if (signo == SIGKILL || signo == SIGSTOP) return -1;
     if (signo <= 0 || signo > SIGMAX) return -1;
     struct proc *p = curr_proc();
 
     if (oldact) {
-        acquire(&p->mm->lock);
+        if (!holding(&p->mm->lock)) acquire(&p->mm->lock);
         if (copy_to_user(p->mm, (uint64)oldact, (char *)&p->signal.sa[signo], sizeof(sigaction_t)) < 0)
         {
             release(&p->mm->lock);
@@ -122,7 +121,7 @@ int sys_sigaction(int signo, const sigaction_t __user *act, sigaction_t __user *
         release(&p->mm->lock);
     }
     if (act) {
-        acquire(&p->mm->lock);
+        if (!holding(&p->mm->lock)) acquire(&p->mm->lock);
         if (copy_from_user(p->mm, (char *)&p->signal.sa[signo], (uint64)act, sizeof(sigaction_t)) < 0)
         {
             release(&p->mm->lock);
@@ -143,7 +142,7 @@ int sigreturn(struct proc *p) {
     struct trapframe *tf = p->trapframe;
     uint64 sp = tf->sp + sizeof(siginfo_t);
     struct ucontext context;
-    acquire(&p->mm->lock);
+    if (!holding(&p->mm->lock)) acquire(&p->mm->lock);
     if (copy_from_user(p->mm, (char *)&context, sp, sizeof(context)) < 0)
     {
         release(&p->mm->lock);
@@ -163,7 +162,7 @@ int sigreturn(struct proc *p) {
 int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset) {
     struct proc *p = curr_proc();
     if (oldset) {
-        acquire(&p->mm->lock);
+        if (!holding(&p->mm->lock)) acquire(&p->mm->lock);
         if (copy_to_user(p->mm, (uint64)oldset, (char *)&p->signal.sigmask, sizeof(sigset_t)) < 0)
         {
             release(&p->mm->lock);
@@ -173,7 +172,7 @@ int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset
     }
     if (set) {
         sigset_t new;
-        acquire(&p->mm->lock);
+        if (!holding(&p->mm->lock)) acquire(&p->mm->lock);
         if (copy_from_user(p->mm, (char *)&new, (uint64)set, sizeof(sigset_t)) < 0)
         {
             release(&p->mm->lock);
@@ -196,7 +195,7 @@ int sys_sigprocmask(int how, const sigset_t __user *set, sigset_t __user *oldset
 int sys_sigpending(sigset_t __user *set) {
     struct proc *p = curr_proc();
     sigset_t result = p->signal.sigpending & p->signal.sigmask;
-    acquire(&p->mm->lock);
+    if (!holding(&p->mm->lock)) acquire(&p->mm->lock);
     if (copy_to_user(p->mm, (uint64)set, (char *)&result, sizeof(sigset_t)) < 0)
     {
         release(&p->mm->lock);
@@ -218,6 +217,7 @@ int sys_sigkill(int pid, int signo, int code) {
         acquire(&p->lock);
         if (p->pid == pid) {
             target = p;
+            release(&p->lock);
             break;
         }
         release(&p->lock);
@@ -227,10 +227,11 @@ int sys_sigkill(int pid, int signo, int code) {
 
     if (signo == SIGKILL || signo == SIGSTOP) {
         setkilled(target, -10 - signo);
-        release(&target->lock);
+        if (holding(&target->lock)) release(&target->lock);
         return 0;
     }
 
+    acquire(&target->lock);
     target->signal.sigpending |= sigmask(signo);
 
     siginfo_t *info = &target->signal.siginfos[signo];
