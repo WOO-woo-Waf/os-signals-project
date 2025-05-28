@@ -34,6 +34,41 @@ static int handle_intr(void) {
         if (cpuid() == 0) {
             acquire(&tickslock);
             ticks++;
+            // // === 添加 alarm 检查逻辑 ===
+            // for (int i = 0; i < NPROC; ++i) {
+            //     struct proc *p = pool[i];
+            //     if (p == NULL) continue;
+
+            //     if (!holding(&p->lock)) acquire(&p->lock);
+            //     if (p->state == UNUSED) {
+            //         release(&p->lock);
+            //         continue;
+            //     }
+
+            //     if (p->signal.alarm_ticks > 0 &&
+            //         (ticks - p->signal.alarm_start_ticks) >= p->signal.alarm_ticks) {
+            //         infof("[kernel] now ticks=%d, alarm start ticks: %d, alarm ticks: %d",ticks,
+            //              p->signal.alarm_start_ticks, p->signal.alarm_ticks);
+            //         p->signal.alarm_ticks = 0;
+            //         p->signal.sigpending |= sigmask(SIGALRM);
+
+            //         siginfo_t *info = &p->signal.siginfos[SIGALRM];
+            //         memset(info, 0, sizeof(siginfo_t));
+            //         info->si_signo = SIGALRM;
+            //         info->si_code  = 0;
+            //         info->si_pid   = -1;  // 表示内核发出
+
+            //         // 唤醒等待 alarm 的 sleep 中进程
+            //         if (p->state == SLEEPING){
+            //             if (holding(&p->lock)) {
+            //                 release(&p->lock);
+            //             }
+            //             wakeup(p);
+            //         }
+                        
+            //     }
+            //     if (holding(&p->lock)) release(&p->lock);
+            // }
             wakeup(&ticks);
             release(&tickslock);
         }
@@ -200,9 +235,28 @@ void usertrap() {
         exit(killed);
 
     // if it's a timer intr, call yield to give up CPU.
-    if (which_dev == 1)
+    if (which_dev == 1) {
+        // yield CPU
         yield();
+    }
 
+    acquire(&tickslock);
+    uint64 now = ticks;
+    release(&tickslock);
+
+    if (p->signal.alarm_ticks > 0 &&
+        (now - p->signal.alarm_start_ticks) >= p->signal.alarm_ticks) {
+        infof("[kernel] ALARM: tick=%d start=%d interval=%d\n", 
+            now, p->signal.alarm_start_ticks, p->signal.alarm_ticks);
+        p->signal.alarm_ticks = 0;
+        p->signal.sigpending |= sigmask(SIGALRM);
+
+        siginfo_t *info = &p->signal.siginfos[SIGALRM];
+        memset(info, 0, sizeof(siginfo_t));
+        info->si_signo = SIGALRM;
+        info->si_code = 0;
+        info->si_pid = -1;
+    }
     // prepare for return to user mode
     assert(!intr_get());
 

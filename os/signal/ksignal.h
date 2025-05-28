@@ -10,6 +10,10 @@ struct ksignal {
     siginfo_t siginfos[SIGMAX + 1];
     sigset_t sigmask;       // signal mask, when set to 1, the signal is blocked
     sigset_t sigpending;
+
+    uint64 alarm_start_ticks;   // 设置 alarm 时的 ticks 值
+    uint64 alarm_ticks;         // 当前 alarm 持续 tick 数，0 表示未设置
+
 };
 
 struct proc;  // forward declaration
@@ -27,4 +31,5 @@ int sys_sigpending(sigset_t __user *set);
 int sys_sigkill(int pid, int signo, int code);
 int sigreturn(struct proc *p);
 int setup_signal_handler(struct proc *p, int signo);
+int sys_alarm(int seconds);
 #endif

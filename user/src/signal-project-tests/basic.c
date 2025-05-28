@@ -362,3 +362,67 @@ void basic20(char *s) {
         assert(ret == 1); // child should not be terminated by SIGUSR0
     }
 }
+
+// basic12: alarm 触发 handler
+void alarm_handler_basic12(int sig, siginfo_t *info, void *ctx) {
+    printf("[basic12] SIGALRM received\n");
+    exit(99);  // 用于父进程判断 handler 被执行
+}
+
+void basic12(char *s) {
+    int pid = fork();
+    if (pid == 0) {
+        sigaction_t sa = {
+            .sa_sigaction = alarm_handler_basic12,
+            .sa_restorer = sigreturn,
+        };
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGALRM, &sa, 0) < 0) {
+            printf("[basic12] sigaction failed\n");
+            exit(111);
+        }
+
+        alarm(1);      // 设置 1 秒后触发
+        sleep(5);      // 等待足够时间
+        exit(1);       // 如果没被 handler 中断，则失败
+    } else {
+        int status;
+        wait(0, &status);
+        if (status == 99)
+            printf("[basic12] OK\n");
+        else
+            printf("[basic12] FAILED (status=%d)\n", status);
+    }
+}
+
+// basic13: alarm 取消
+void alarm_handler_basic13(int sig, siginfo_t *info, void *ctx) {
+    printf("[basic13] handler should NOT be called\n");
+    exit(200);  // 如果触发了说明失败
+}
+
+void basic13(char *s) {
+    int pid = fork();
+    if (pid == 0) {
+        sigaction_t sa = {
+            .sa_sigaction = alarm_handler_basic13,
+            .sa_restorer = sigreturn,
+        };
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGALRM, &sa, 0);
+
+        alarm(2);      // 设置 alarm
+        sleep(1);      // 在它触发前取消
+        alarm(0);      // 取消 alarm
+        sleep(3);      // 等待看是否触发
+        exit(123);     // handler 没触发则成功
+    } else {
+        int status;
+        wait(0, &status);
+        if (status == 123)
+            printf("[basic13] OK\n");
+        else
+            printf("[basic13] FAILED (status=%d)\n", status);
+    }
+}
+

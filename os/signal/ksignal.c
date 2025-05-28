@@ -7,6 +7,8 @@
 #include "string.h"
 #include "vm.h"  // for walkaddr, PA_TO_KVA, etc
 
+#include "timer.h"
+
 
 
 /**
@@ -242,4 +244,27 @@ int sys_sigkill(int pid, int signo, int code) {
     release(&target->lock);
     return 0;
 }
+
+int sys_alarm(int seconds) {
+    struct proc *p = curr_proc();
+    int old = 0;
+
+    acquire(&p->lock);
+    infof("[kernel] sys_alarm: seconds=%d, ticks=%d", seconds, ticks);
+    if (p->signal.alarm_ticks > 0 && ticks >= p->signal.alarm_start_ticks) {
+        int remaining = (p->signal.alarm_start_ticks + p->signal.alarm_ticks - ticks) / TICKS_PER_SEC;
+        old = remaining > 0 ? remaining : 0;
+    }
+
+    if (seconds == 0) {
+        p->signal.alarm_ticks = 0;  // 取消 alarm
+    } else {
+        p->signal.alarm_ticks = seconds * TICKS_PER_SEC;
+        p->signal.alarm_start_ticks = ticks;
+    }
+
+    release(&p->lock);
+    return old;
+}
+
 

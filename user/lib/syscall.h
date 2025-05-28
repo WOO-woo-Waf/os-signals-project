@@ -30,4 +30,7 @@ int sigkill(int pid, int signo, int code);
 int sigpending(sigset_t *set);
 int sigprocmask(int how, const sigset_t *newset, sigset_t *oldset);
 
+int alarm(int seconds); // 5.3.1
+
+
 #endif // __SYSCALL_H
