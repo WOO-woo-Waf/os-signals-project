@@ -181,8 +181,14 @@ static void handle_pgfault(void) {
         }
     }
     // otherwise, it is a page fault due to invalid address
-    infof("page fault in application, bad addr = %p, bad instruction = %p, core dumped.", r_stval(), p->trapframe->epc);
-    setkilled(p, -2);
+    siginfo_t *info = &p->signal.siginfos[SIGSEGV];
+    memset(info, 0, sizeof(siginfo_t));
+    info->si_signo = SIGKILL;
+    info->addr = (void*)addr; // 错误地址
+    info->si_pid = -1; // 内核发送的信号
+
+    p->signal.sigpending |= sigmask(SIGKILL);
+    do_signal();
 }
 
 static void unknown_trap(void) {

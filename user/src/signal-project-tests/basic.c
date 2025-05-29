@@ -426,3 +426,127 @@ void basic13(char *s) {
     }
 }
 
+// basic.c
+void siginfo_test1_handler(int signo, siginfo_t *info, void *ctx) {
+    printf("Received signal %d from PID %d\n", info->si_signo, info->si_pid);
+    assert(info->si_signo == SIGUSR1);
+    assert(info->si_pid == getppid());  // 应来自父进程
+    assert(info->si_code == 123);       // 验证自定义代码
+    exit(0);
+}
+
+void siginfo_test1(char* s) {
+    int pid = fork();
+    if (pid == 0) {
+        // 子进程
+        sigaction_t sa = {
+            .sa_sigaction = siginfo_test1_handler,
+            .sa_restorer = sigreturn
+        };
+        sigaction(SIGUSR1, &sa, 0);
+        while(1) sleep(1);  // 等待信号
+    } else {
+        // 父进程
+        sleep(1);
+        sigkill(pid, SIGUSR1, 123);  // 发送带自定义代码的信号
+        int status;
+        wait(0, &status);
+        assert(status == 0);  // 验证子进程正常退出
+    }
+}
+
+// basic.c
+void siginfo_test2_handler(int signo, siginfo_t *info, void *ctx) {
+    printf("Segfault at %p from kernel\n", info->addr);
+    assert(info->si_signo == SIGKILL);
+    assert(info->si_pid == -1);       // 内核发送的信号
+    assert(info->addr == (void*)0xDEADBEEF);  // 验证错误地址
+}
+
+void siginfo_test2(char* s) {
+    int pid = fork();
+    if (pid == 0) {
+        // 子进程
+        sigaction_t sa = {
+            .sa_sigaction = siginfo_test2_handler,
+            .sa_restorer = sigreturn
+        };
+        sigaction(SIGUSR1, &sa, 0);
+        
+        // 故意触发页错误
+        *(volatile int*)0xDEADBEEF = 42;
+        while(1);  // 不应执行到这里
+    } else {
+        // 父进程
+        int status;
+        wait(0, &status);
+        assert(status == -10 - SIGKILL);  // 验证信号处理正常
+    }
+}
+
+// basic.c
+volatile int siginfo_test3_count = 0;
+void siginfo_test3_handler(int signo, siginfo_t *info, void *ctx) {
+    printf("Signal %d from %d (count=%d)\n", 
+           info->si_signo, info->si_pid, siginfo_test3_count);
+    
+    if (siginfo_test3_count == 0) {
+        assert(info->si_pid == getppid());  // 第一次来自父进程
+    } else {
+        assert(info->si_pid == getpid());   // 后续来自自身
+    }
+    
+    if (++siginfo_test3_count < 3) {
+        sigkill(getpid(), SIGUSR1, 0);  // 再次发送信号
+    } else {
+        exit(0);
+    }
+}
+
+void siginfo_test3(char* s) {
+    int pid = fork();
+    if (pid == 0) {
+        // 子进程
+        sigaction_t sa = {
+            .sa_sigaction = siginfo_test3_handler,
+            .sa_restorer = sigreturn
+        };
+        sigaction(SIGUSR1, &sa, 0);
+        while(siginfo_test3_count < 3) sleep(1);
+    } else {
+        // 父进程
+        sleep(1);
+        sigkill(pid, SIGUSR1, 0);  // 发送初始信号
+        int status;
+        wait(0, &status);
+        assert(status == 0);
+    }
+}
+
+
+void siginfo_test4_handler(int signo, siginfo_t *info, void *ctx) {
+    printf("Special signal %d from %d\n", info->si_signo, info->si_pid);
+    assert(info->si_signo == SIGTERM);
+    assert(info->si_pid == getppid());
+    exit(0);
+}
+
+void siginfo_test4(char* s) {
+    int pid = fork();
+    if (pid == 0) {
+        // 子进程
+        sigaction_t sa = {
+            .sa_sigaction = siginfo_test4_handler,
+            .sa_restorer = sigreturn
+        };
+        sigaction(SIGTERM, &sa, 0);
+        while(1) sleep(1);
+    } else {
+        // 父进程
+        sleep(1);
+        sigkill(pid, SIGTERM, 456);  // 发送特殊信号
+        int status;
+        wait(0, &status);
+        assert(status == 0);
+    }
+}

@@ -212,7 +212,7 @@ int sys_sigkill(int pid, int signo, int code) {
         return -1;
 
     struct proc *target = 0;
-
+    struct proc *sender = curr_proc();
     // 遍历全局进程表，查找目标进程
     for (int i = 0; i < NPROC; i++) {
         struct proc *p = pool[i];
@@ -240,7 +240,7 @@ int sys_sigkill(int pid, int signo, int code) {
     memset(info, 0, sizeof(siginfo_t));
     info->si_signo = signo;
     info->si_code = code;
-
+    info->si_pid = sender->pid;
     release(&target->lock);
     return 0;
 }
