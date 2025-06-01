@@ -252,7 +252,7 @@ void usertrap() {
 
     if (p->signal.alarm_ticks > 0 &&
         (now - p->signal.alarm_start_ticks) >= p->signal.alarm_ticks) {
-        infof("[kernel] ALARM: tick=%d start=%d interval=%d\n", 
+        infof("ALARM: now tick=%d p->signal.alarm_start_ticks=%d p->signal.alarm_ticks=%d\n", 
             now, p->signal.alarm_start_ticks, p->signal.alarm_ticks);
         p->signal.alarm_ticks = 0;
         p->signal.sigpending |= sigmask(SIGALRM);

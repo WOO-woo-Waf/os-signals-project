@@ -250,7 +250,7 @@ int sys_alarm(int seconds) {
     int old = 0;
 
     acquire(&p->lock);
-    infof("[kernel] sys_alarm: seconds=%d, ticks=%d", seconds, ticks);
+    infof("sys_alarm: seconds=%d, now ticks=%d", seconds, ticks);
     if (p->signal.alarm_ticks > 0 && ticks >= p->signal.alarm_start_ticks) {
         int remaining = (p->signal.alarm_start_ticks + p->signal.alarm_ticks - ticks) / TICKS_PER_SEC;
         old = remaining > 0 ? remaining : 0;
